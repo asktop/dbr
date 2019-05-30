@@ -29,6 +29,7 @@ type SelectStmt struct {
 	LimitCount  int64
 	OffsetCount int64
 	showSql     bool
+	TableAs     string
 }
 
 type SelectBuilder = SelectStmt
@@ -65,12 +66,20 @@ func (b *SelectStmt) Build(d Dialect, buf Buffer) error {
 	if b.Table != nil {
 		buf.WriteString(" FROM ")
 		switch table := b.Table.(type) {
+		case Builder:
+			buf.WriteString("(")
+			table.Build(d, buf)
+			buf.WriteString(")")
 		case string:
 			// FIXME: no quote ident
 			buf.WriteString(table)
 		default:
 			buf.WriteString(placeholder)
 			buf.WriteValue(table)
+		}
+		if b.TableAs != "" {
+			buf.WriteString(" As ")
+			buf.WriteString(b.TableAs)
 		}
 		if len(b.JoinTable) > 0 {
 			for _, join := range b.JoinTable {
@@ -214,8 +223,11 @@ func (tx *Tx) SelectBySql(query string, value ...interface{}) *SelectStmt {
 
 // From specifies table to select from.
 // table can be Builder like SelectStmt, or string.
-func (b *SelectStmt) From(table interface{}) *SelectStmt {
+func (b *SelectStmt) From(table interface{}, as ...string) *SelectStmt {
 	b.Table = table
+	if len(as) > 0 {
+		b.TableAs = as[0]
+	}
 	return b
 }
 
