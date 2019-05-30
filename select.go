@@ -30,6 +30,7 @@ type SelectStmt struct {
 	OffsetCount int64
 	showSql     bool
 	TableAs     string
+	IsLock      *bool
 }
 
 type SelectBuilder = SelectStmt
@@ -151,6 +152,15 @@ func (b *SelectStmt) Build(d Dialect, buf Buffer) error {
 				return err
 			}
 		}
+	}
+
+	//select添加Lock锁表方法
+	if b.IsLock == nil {
+		if _, ok := b.runner.(*Tx); ok {
+			buf.WriteString(" FOR UPDATE ")
+		}
+	} else if *b.IsLock {
+		buf.WriteString(" FOR UPDATE ")
 	}
 
 	return nil
@@ -348,6 +358,12 @@ func (b *SelectStmt) FullJoin(table, on interface{}) *SelectStmt {
 // As creates alias for select statement.
 func (b *SelectStmt) As(alias string) Builder {
 	return as(b, alias)
+}
+
+//select添加Lock锁表方法
+func (b *SelectStmt) Lock(isLock bool) *SelectStmt {
+	b.IsLock = &isLock
+	return b
 }
 
 //添加ShowSql()方法打印SQL语句
