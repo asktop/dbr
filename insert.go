@@ -21,11 +21,16 @@ type InsertStmt struct {
 	ReturnColumn []string
 	RecordID     *int64
 	showSql      bool
+	RunLen       int
 }
 
 type InsertBuilder = InsertStmt
 
 func (b *InsertStmt) Build(d Dialect, buf Buffer) error {
+	//赋予批量插入默认最大上限
+	if b.RunLen == 0 {
+		b.RunLen = 1000
+	}
 	if b.raw.Query != "" {
 		return b.raw.Build(d, buf)
 	}
@@ -56,7 +61,14 @@ func (b *InsertStmt) Build(d Dialect, buf Buffer) error {
 	placeholderBuf.WriteString(")")
 	placeholderStr := placeholderBuf.String()
 
+	var runnum int
 	for i, tuple := range b.Value {
+		//超过更新行数
+		if i >= b.RunLen {
+			break
+		}
+		//更新数量
+		runnum++
 		if i > 0 {
 			buf.WriteString(", ")
 		}
@@ -64,6 +76,8 @@ func (b *InsertStmt) Build(d Dialect, buf Buffer) error {
 
 		buf.WriteValue(tuple...)
 	}
+	//进行截取
+	b.Value = b.Value[runnum:]
 
 	if len(b.ReturnColumn) > 0 {
 		buf.WriteString(" RETURNING ")
@@ -221,22 +235,31 @@ func (b *InsertStmt) ShowSql() *InsertStmt {
 	return b
 }
 
+//insert添加设置一次性批量插入限制方法，默认1000
+func (b *InsertStmt) SetRunLen(i int) *InsertStmt {
+	b.RunLen = i
+	return b
+}
+
 func (b *InsertStmt) Exec() (sql.Result, error) {
 	return b.ExecContext(context.Background())
 }
 
 func (b *InsertStmt) ExecContext(ctx context.Context) (sql.Result, error) {
 	showSql(b.showSql, b, b.Dialect)
-	result, err := exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
-	if err != nil {
-		return nil, err
-	}
-
-	if b.RecordID != nil {
-		if id, err := result.LastInsertId(); err == nil {
-			*b.RecordID = id
+	var err error
+	var result sql.Result
+	for len(b.Value) > 0 && err == nil {
+		result, err = exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
+		if err != nil {
+			return nil, err
 		}
-		b.RecordID = nil
+		if b.RecordID != nil {
+			if id, err := result.LastInsertId(); err == nil {
+				*b.RecordID = id
+			}
+			b.RecordID = nil
+		}
 	}
 
 	return result, nil
