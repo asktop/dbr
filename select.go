@@ -28,6 +28,7 @@ type SelectStmt struct {
 
 	LimitCount  int64
 	OffsetCount int64
+	showSql     bool
 }
 
 type SelectBuilder = SelectStmt
@@ -337,17 +338,25 @@ func (b *SelectStmt) As(alias string) Builder {
 	return as(b, alias)
 }
 
+//添加ShowSql()方法打印SQL语句
+func (b *SelectStmt) ShowSql() *SelectStmt {
+	b.showSql = true
+	return b
+}
+
 // Rows executes the query and returns the rows returned, or any error encountered.
 func (b *SelectStmt) Rows() (*sql.Rows, error) {
 	return b.RowsContext(context.Background())
 }
 
 func (b *SelectStmt) RowsContext(ctx context.Context) (*sql.Rows, error) {
+	showSql(b.showSql, b, b.Dialect)
 	_, rows, err := queryRows(ctx, b.runner, b.EventReceiver, b, b.Dialect)
 	return rows, err
 }
 
 func (b *SelectStmt) LoadOneContext(ctx context.Context, value interface{}) error {
+	showSql(b.showSql, b, b.Dialect)
 	count, err := query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value)
 	if err != nil {
 		return err
@@ -367,6 +376,7 @@ func (b *SelectStmt) LoadOne(value interface{}) error {
 }
 
 func (b *SelectStmt) LoadContext(ctx context.Context, value interface{}) (int, error) {
+	showSql(b.showSql, b, b.Dialect)
 	return query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value)
 }
 

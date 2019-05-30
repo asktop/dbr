@@ -19,6 +19,7 @@ type UpdateStmt struct {
 	WhereCond    []Builder
 	ReturnColumn []string
 	LimitCount   int64
+	showSql      bool
 }
 
 type UpdateBuilder = UpdateStmt
@@ -173,15 +174,23 @@ func (b *UpdateStmt) Limit(n uint64) *UpdateStmt {
 	return b
 }
 
+//添加ShowSql()方法打印SQL语句
+func (b *UpdateStmt) ShowSql() *UpdateStmt {
+	b.showSql = true
+	return b
+}
+
 func (b *UpdateStmt) Exec() (sql.Result, error) {
 	return b.ExecContext(context.Background())
 }
 
 func (b *UpdateStmt) ExecContext(ctx context.Context) (sql.Result, error) {
+	showSql(b.showSql, b, b.Dialect)
 	return exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
 }
 
 func (b *UpdateStmt) LoadContext(ctx context.Context, value interface{}) error {
+	showSql(b.showSql, b, b.Dialect)
 	_, err := query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value)
 	return err
 }

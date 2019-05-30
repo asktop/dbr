@@ -20,6 +20,7 @@ type InsertStmt struct {
 	Value        [][]interface{}
 	ReturnColumn []string
 	RecordID     *int64
+	showSql      bool
 }
 
 type InsertBuilder = InsertStmt
@@ -196,11 +197,18 @@ func (b *InsertStmt) Pair(column string, value interface{}) *InsertStmt {
 	return b
 }
 
+//添加ShowSql()方法打印SQL语句
+func (b *InsertStmt) ShowSql() *InsertStmt {
+	b.showSql = true
+	return b
+}
+
 func (b *InsertStmt) Exec() (sql.Result, error) {
 	return b.ExecContext(context.Background())
 }
 
 func (b *InsertStmt) ExecContext(ctx context.Context) (sql.Result, error) {
+	showSql(b.showSql, b, b.Dialect)
 	result, err := exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
 	if err != nil {
 		return nil, err
@@ -217,6 +225,7 @@ func (b *InsertStmt) ExecContext(ctx context.Context) (sql.Result, error) {
 }
 
 func (b *InsertStmt) LoadContext(ctx context.Context, value interface{}) error {
+	showSql(b.showSql, b, b.Dialect)
 	_, err := query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value)
 	return err
 }

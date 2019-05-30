@@ -17,6 +17,7 @@ type DeleteStmt struct {
 	Table      string
 	WhereCond  []Builder
 	LimitCount int64
+	showSql    bool
 }
 
 type DeleteBuilder = DeleteStmt
@@ -119,10 +120,17 @@ func (b *DeleteStmt) Limit(n uint64) *DeleteStmt {
 	return b
 }
 
+//添加ShowSql()方法打印SQL语句
+func (b *DeleteStmt) ShowSql() *DeleteStmt {
+	b.showSql = true
+	return b
+}
+
 func (b *DeleteStmt) Exec() (sql.Result, error) {
 	return b.ExecContext(context.Background())
 }
 
 func (b *DeleteStmt) ExecContext(ctx context.Context) (sql.Result, error) {
+	showSql(b.showSql, b, b.Dialect)
 	return exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
 }

@@ -214,3 +214,13 @@ func query(ctx context.Context, runner runner, log EventReceiver, builder Builde
 	}
 	return count, nil
 }
+
+//添加ShowSql()方法打印SQL语句
+func showSql(isShowSql bool, b Builder, d Dialect) {
+	if isShowSql {
+		buf := NewBuffer()
+		b.Build(d, buf)
+		fmt.Println(buf.String())
+		fmt.Println(buf.Value())
+	}
+}
