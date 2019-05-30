@@ -102,9 +102,9 @@ func Load(rows *sql.Rows, value interface{}) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		for i := range ptr {
-			ptr[i] = nil
-		}
+		//for i := range ptr {
+		//	ptr[i] = nil
+		//}
 
 		count++
 
@@ -120,6 +120,10 @@ func Load(rows *sql.Rows, value interface{}) (int, error) {
 			v.SetMapIndex(keyElem, elem)
 		} else {
 			break
+		}
+
+		for i := range ptr {
+			ptr[i] = nil
 		}
 	}
 	return count, nil
