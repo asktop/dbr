@@ -197,6 +197,24 @@ func (b *InsertStmt) Pair(column string, value interface{}) *InsertStmt {
 	return b
 }
 
+//insert添加Map方法，支持map值插入，key为column，value为value
+func (b *InsertStmt) Map(kv map[string]interface{}) *InsertStmt {
+	value := []interface{}{}
+	if len(b.Column) == 0 {
+		for k, v := range kv {
+			b.Column = append(b.Column, k)
+			value = append(value, v)
+		}
+	} else {
+		for _, col := range b.Column {
+			v := kv[col]
+			value = append(value, v)
+		}
+	}
+	b.Value = append(b.Value, value)
+	return b
+}
+
 //添加ShowSql()方法打印SQL语句
 func (b *InsertStmt) ShowSql() *InsertStmt {
 	b.showSql = true
