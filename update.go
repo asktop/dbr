@@ -3,6 +3,7 @@ package dbr
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strconv"
 )
 
@@ -67,6 +68,8 @@ func (b *UpdateStmt) Build(d Dialect, buf Buffer) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		return errors.New("The update sql do not has Where")
 	}
 
 	if len(b.ReturnColumn) > 0 {
