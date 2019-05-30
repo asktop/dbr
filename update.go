@@ -48,9 +48,16 @@ func (b *UpdateStmt) Build(d Dialect, buf Buffer) error {
 		}
 		buf.WriteString(d.QuoteIdent(col))
 		buf.WriteString(" = ")
-		buf.WriteString(placeholder)
 
-		buf.WriteValue(v)
+		//update Set方法value值支持dbr.Expr表达式
+		switch v := v.(type) {
+		case raw:
+			v.Build(d, buf)
+		default:
+			buf.WriteString(placeholder)
+			buf.WriteValue(v)
+		}
+
 		i++
 	}
 
