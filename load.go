@@ -109,6 +109,11 @@ func Load(rows *sql.Rows, value interface{}) (int, error) {
 		count++
 
 		if isSlice {
+			if elem.Kind() == reflect.Map {
+				for i, name := range column {
+					elem.SetMapIndex(reflect.ValueOf(name), reflect.ValueOf(ptr[i]).Elem())
+				}
+			}
 			v.Set(reflect.Append(v, elem))
 		} else if isMapOfSlices {
 			s := v.MapIndex(keyElem)
