@@ -24,11 +24,12 @@ type TracingEventReceiver interface {
 	SpanFinish(ctx context.Context)
 }
 
-var showSQL bool
+var showSQLLevel int
 
 //是否打印SQL
-func ShowSQL(isShowSQL bool) {
-	showSQL = isShowSQL
+// level 0：不打印SQL；1：只打印err；2：打印全部
+func ShowSQL(level int) {
+	showSQLLevel = level
 }
 
 type kvs map[string]string
@@ -52,7 +53,7 @@ func (n *NullEventReceiver) EventErr(eventName string, err error) error { return
 // EventErrKv receives a notification of an error if one occurs along with
 // optional key/value data.
 func (n *NullEventReceiver) EventErrKv(eventName string, err error, kvs map[string]string) error {
-	if showSQL {
+	if showSQLLevel >= 1 {
 		var sql, tim string
 		if s, ok := kvs["sql"]; ok {
 			sql = s
@@ -72,7 +73,7 @@ func (n *NullEventReceiver) Timing(eventName string, nanoseconds int64) {}
 
 // TimingKv receives the time an event took to happen along with optional key/value data.
 func (n *NullEventReceiver) TimingKv(eventName string, nanoseconds int64, kvs map[string]string) {
-	if showSQL {
+	if showSQLLevel >= 2 {
 		var sql string
 		if s, ok := kvs["sql"]; ok {
 			sql = s
