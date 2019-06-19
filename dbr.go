@@ -150,7 +150,7 @@ func exec(ctx context.Context, runner runner, log EventReceiver, builder Builder
 		})
 	}
 
-	log.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
+	log.TimingKv("dbr.exec", time.Since(startTime).Nanoseconds(), kvs{
 		"sql": query,
 	})
 	return result, nil
@@ -268,7 +268,7 @@ func count(ctx context.Context, runner runner, log EventReceiver, builder Builde
 		rows.Scan(&count)
 	}
 
-	log.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
+	log.TimingKv("dbr.count", time.Since(startTime).Nanoseconds(), kvs{
 		"sql": query,
 	})
 	return count, nil
