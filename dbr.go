@@ -228,6 +228,52 @@ func query(ctx context.Context, runner runner, log EventReceiver, builder Builde
 	return count, nil
 }
 
+func count(ctx context.Context, runner runner, log EventReceiver, builder Builder, d Dialect) (int, error) {
+	i := interpolator{
+		Buffer:       NewBuffer(),
+		Dialect:      d,
+		IgnoreBinary: true,
+	}
+	err := i.encodePlaceholder(builder, true)
+	query, value := i.String(), i.Value()
+	query = fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS count", query)
+	if err != nil {
+		return 0, log.EventErrKv("dbr.select.interpolate", err, kvs{
+			"sql":  query,
+			"args": fmt.Sprint(value),
+		})
+	}
+
+	startTime := time.Now()
+
+	traceImpl, hasTracingImpl := log.(TracingEventReceiver)
+	if hasTracingImpl {
+		ctx = traceImpl.SpanStart(ctx, "dbr.select", query)
+		defer traceImpl.SpanFinish(ctx)
+	}
+
+	rows, err := runner.QueryContext(ctx, query, value...)
+	if err != nil {
+		if hasTracingImpl {
+			traceImpl.SpanError(ctx, err)
+		}
+		return 0, log.EventErrKv("dbr.select.load.query", err, kvs{
+			"sql":  query,
+			"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+		})
+	}
+	defer rows.Close()
+	var count int
+	if rows.Next() {
+		rows.Scan(&count)
+	}
+
+	log.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
+		"sql": query,
+	})
+	return count, nil
+}
+
 //获取SQL
 func getSQL(builder Builder, d Dialect) (string, error) {
 	i := interpolator{

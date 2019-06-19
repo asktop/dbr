@@ -373,6 +373,13 @@ func (b *SelectStmt) GetSQL() (string, error) {
 	return getSQL(b2, b2.Dialect)
 }
 
+//获取总条数
+func (b *SelectStmt) Count() (int, error) {
+	b1 := *b
+	b2 := &b1
+	return count(context.Background(), b2.runner, b2.EventReceiver, b2, b2.Dialect)
+}
+
 // Rows executes the query and returns the rows returned, or any error encountered.
 func (b *SelectStmt) Rows() (*sql.Rows, error) {
 	return b.RowsContext(context.Background())
