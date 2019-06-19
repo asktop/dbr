@@ -125,6 +125,25 @@ func Lte(column string, value interface{}) Builder {
 	})
 }
 
+// Between is `BETWEEN ? AND ?`.
+func Between(column string, minVal interface{}, maxVal interface{}) Builder {
+	return BuildFunc(func(d Dialect, buf Buffer) error {
+		return buildBetween(d, buf, column, minVal, maxVal)
+	})
+}
+
+func buildBetween(d Dialect, buf Buffer, column string, minVal interface{}, maxVal interface{}) error {
+	buf.WriteString(d.QuoteIdent(column))
+	buf.WriteString(" BETWEEN ")
+	buf.WriteString(placeholder)
+	buf.WriteString(" AND ")
+	buf.WriteString(placeholder)
+
+	buf.WriteValue(minVal)
+	buf.WriteValue(maxVal)
+	return nil
+}
+
 func buildLike(d Dialect, buf Buffer, column, pattern string, isNot bool, escape []string) error {
 	buf.WriteString(d.QuoteIdent(column))
 	if isNot {
