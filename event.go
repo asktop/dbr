@@ -3,6 +3,7 @@ package dbr
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -24,12 +25,18 @@ type TracingEventReceiver interface {
 	SpanFinish(ctx context.Context)
 }
 
-var showSQLLevel int
+var (
+	showSQLLevel int
+	logPrintFunc func(args ...interface{})
+)
 
 //是否打印SQL
 // level 0：不打印SQL；1：只打印err；2：打印全部
-func ShowSQL(level int) {
+func ShowSQL(level int, logPrint ...func(args ...interface{})) {
 	showSQLLevel = level
+	if len(logPrint) > 0 {
+		logPrintFunc = logPrint[0]
+	}
 }
 
 type kvs map[string]string
@@ -54,16 +61,25 @@ func (n *NullEventReceiver) EventErr(eventName string, err error) error { return
 // optional key/value data.
 func (n *NullEventReceiver) EventErrKv(eventName string, err error, kvs map[string]string) error {
 	if showSQLLevel >= 1 {
-		var sql, tim string
+		var sql, useStr string
 		if s, ok := kvs["sql"]; ok {
 			sql = s
 		}
+		use := time.Millisecond
 		if s, ok := kvs["time"]; ok {
-			tim = s
+			useStr = s
+			useInt, _ := strconv.Atoi(useStr)
+			use = use * time.Duration(useInt)
 		} else {
-			tim = "-"
+			useStr = "-"
+			use = use * 0
 		}
-		fmt.Println(fmt.Sprintf("[DBR]%s [ERR %sms] [%v] %s", time.Now().Format("2006/01/02 15:04:05.000"), tim, err, sql))
+		sqlLog := fmt.Sprintf("[ERR %sms] [%v] %s", useStr, err, sql)
+		if logPrintFunc != nil {
+			logPrintFunc(sqlLog)
+		} else {
+			fmt.Println(fmt.Sprintf("[DBR]%s %s", time.Now().Add(-use).Format("2006/01/02 15:04:05.000"), sqlLog))
+		}
 	}
 	return err
 }
@@ -78,6 +94,11 @@ func (n *NullEventReceiver) TimingKv(eventName string, nanoseconds int64, kvs ma
 		if s, ok := kvs["sql"]; ok {
 			sql = s
 		}
-		fmt.Println(fmt.Sprintf("[DBR]%s [OK %dms] %s", time.Now().Format("2006/01/02 15:04:05.000"), nanoseconds/1e6, sql))
+		sqlLog := fmt.Sprintf("[OK %dms] %s", nanoseconds/1e6, sql)
+		if logPrintFunc != nil {
+			logPrintFunc(sqlLog)
+		} else {
+			fmt.Println(fmt.Sprintf("[DBR]%s %s", time.Now().Add(-time.Duration(nanoseconds)).Format("2006/01/02 15:04:05.000"), sqlLog))
+		}
 	}
 }
