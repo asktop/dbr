@@ -1,6 +1,10 @@
 package dbr
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"time"
+)
 
 // EventReceiver gets events from dbr methods for logging purposes.
 type EventReceiver interface {
@@ -18,6 +22,13 @@ type TracingEventReceiver interface {
 	SpanStart(ctx context.Context, eventName, query string) context.Context
 	SpanError(ctx context.Context, err error)
 	SpanFinish(ctx context.Context)
+}
+
+var showSQL bool
+
+//是否打印SQL
+func ShowSQL(isShowSQL bool) {
+	showSQL = isShowSQL
 }
 
 type kvs map[string]string
@@ -41,6 +52,18 @@ func (n *NullEventReceiver) EventErr(eventName string, err error) error { return
 // EventErrKv receives a notification of an error if one occurs along with
 // optional key/value data.
 func (n *NullEventReceiver) EventErrKv(eventName string, err error, kvs map[string]string) error {
+	if showSQL {
+		var sql, tim string
+		if s, ok := kvs["sql"]; ok {
+			sql = s
+		}
+		if s, ok := kvs["time"]; ok {
+			tim = s
+		} else {
+			tim = "-"
+		}
+		fmt.Println(fmt.Sprintf("[DBR]%s [ERR %sms] [%v] %s", time.Now().Format("2006/01/02 15:04:05.000"), tim, err, sql))
+	}
 	return err
 }
 
@@ -48,4 +71,12 @@ func (n *NullEventReceiver) EventErrKv(eventName string, err error, kvs map[stri
 func (n *NullEventReceiver) Timing(eventName string, nanoseconds int64) {}
 
 // TimingKv receives the time an event took to happen along with optional key/value data.
-func (n *NullEventReceiver) TimingKv(eventName string, nanoseconds int64, kvs map[string]string) {}
+func (n *NullEventReceiver) TimingKv(eventName string, nanoseconds int64, kvs map[string]string) {
+	if showSQL {
+		var sql string
+		if s, ok := kvs["sql"]; ok {
+			sql = s
+		}
+		fmt.Println(fmt.Sprintf("[DBR]%s [OK %dms] %s", time.Now().Format("2006/01/02 15:04:05.000"), nanoseconds/1e6, sql))
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"strconv"
+	"time"
 )
 
 // SelectStmt builds `SELECT ...`.
@@ -28,7 +29,6 @@ type SelectStmt struct {
 
 	LimitCount  int64
 	OffsetCount int64
-	showSql     bool
 	TableAs     string
 	IsLock      *bool
 }
@@ -366,10 +366,11 @@ func (b *SelectStmt) Lock(isLock bool) *SelectStmt {
 	return b
 }
 
-//添加ShowSql()方法打印SQL语句
-func (b *SelectStmt) ShowSql() *SelectStmt {
-	b.showSql = true
-	return b
+//获取SQL
+func (b *SelectStmt) GetSQL() (string, error) {
+	b1 := *b
+	b2 := &b1
+	return getSQL(b2, b2.Dialect)
 }
 
 // Rows executes the query and returns the rows returned, or any error encountered.
@@ -378,13 +379,15 @@ func (b *SelectStmt) Rows() (*sql.Rows, error) {
 }
 
 func (b *SelectStmt) RowsContext(ctx context.Context) (*sql.Rows, error) {
-	showSql(b.showSql, b, b.Dialect)
-	_, rows, err := queryRows(ctx, b.runner, b.EventReceiver, b, b.Dialect)
+	startTime := time.Now()
+	query, rows, err := queryRows(ctx, b.runner, b.EventReceiver, b, b.Dialect)
+	b.EventReceiver.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
+		"sql": query,
+	})
 	return rows, err
 }
 
 func (b *SelectStmt) LoadOneContext(ctx context.Context, value interface{}) error {
-	showSql(b.showSql, b, b.Dialect)
 	count, err := query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value)
 	if err != nil {
 		return err
@@ -404,7 +407,6 @@ func (b *SelectStmt) LoadOne(value interface{}) error {
 }
 
 func (b *SelectStmt) LoadContext(ctx context.Context, value interface{}) (int, error) {
-	showSql(b.showSql, b, b.Dialect)
 	return query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value)
 }
 

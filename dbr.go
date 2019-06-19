@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/gocraft/dbr/dialect"
@@ -126,11 +127,11 @@ func exec(ctx context.Context, runner runner, log EventReceiver, builder Builder
 	}
 
 	startTime := time.Now()
-	defer func() {
-		log.TimingKv("dbr.exec", time.Since(startTime).Nanoseconds(), kvs{
-			"sql": query,
-		})
-	}()
+	//defer func() {
+	//	log.TimingKv("dbr.exec", time.Since(startTime).Nanoseconds(), kvs{
+	//		"sql": query,
+	//	})
+	//}()
 
 	traceImpl, hasTracingImpl := log.(TracingEventReceiver)
 	if hasTracingImpl {
@@ -144,9 +145,14 @@ func exec(ctx context.Context, runner runner, log EventReceiver, builder Builder
 			traceImpl.SpanError(ctx, err)
 		}
 		return result, log.EventErrKv("dbr.exec.exec", err, kvs{
-			"sql": query,
+			"sql":  query,
+			"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
 		})
 	}
+
+	log.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
+		"sql": query,
+	})
 	return result, nil
 }
 
@@ -169,11 +175,11 @@ func queryRows(ctx context.Context, runner runner, log EventReceiver, builder Bu
 	}
 
 	startTime := time.Now()
-	defer func() {
-		log.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
-			"sql": query,
-		})
-	}()
+	//defer func() {
+	//	log.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
+	//		"sql": query,
+	//	})
+	//}()
 
 	traceImpl, hasTracingImpl := log.(TracingEventReceiver)
 	if hasTracingImpl {
@@ -187,7 +193,8 @@ func queryRows(ctx context.Context, runner runner, log EventReceiver, builder Bu
 			traceImpl.SpanError(ctx, err)
 		}
 		return query, nil, log.EventErrKv("dbr.select.load.query", err, kvs{
-			"sql": query,
+			"sql":  query,
+			"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
 		})
 	}
 
@@ -202,6 +209,7 @@ func query(ctx context.Context, runner runner, log EventReceiver, builder Builde
 		defer cancel()
 	}
 
+	startTime := time.Now()
 	query, rows, err := queryRows(ctx, runner, log, builder, d)
 	if err != nil {
 		return 0, err
@@ -209,18 +217,24 @@ func query(ctx context.Context, runner runner, log EventReceiver, builder Builde
 	count, err := Load(rows, dest)
 	if err != nil {
 		return 0, log.EventErrKv("dbr.select.load.scan", err, kvs{
-			"sql": query,
+			"sql":  query,
+			"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
 		})
 	}
+
+	log.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
+		"sql": query,
+	})
 	return count, nil
 }
 
-//添加ShowSql()方法打印SQL语句
-func showSql(isShowSql bool, b Builder, d Dialect) {
-	if isShowSql {
-		buf := NewBuffer()
-		b.Build(d, buf)
-		fmt.Println(buf.String())
-		fmt.Println(buf.Value())
+//获取SQL
+func getSQL(builder Builder, d Dialect) (string, error) {
+	i := interpolator{
+		Buffer:       NewBuffer(),
+		Dialect:      d,
+		IgnoreBinary: true,
 	}
+	err := i.encodePlaceholder(builder, true)
+	return i.String(), err
 }

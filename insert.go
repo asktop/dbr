@@ -20,7 +20,6 @@ type InsertStmt struct {
 	Value        [][]interface{}
 	ReturnColumn []string
 	RecordID     *int64
-	showSql      bool
 	RunLen       int
 }
 
@@ -229,10 +228,11 @@ func (b *InsertStmt) Map(kv map[string]interface{}) *InsertStmt {
 	return b
 }
 
-//添加ShowSql()方法打印SQL语句
-func (b *InsertStmt) ShowSql() *InsertStmt {
-	b.showSql = true
-	return b
+//获取SQL
+func (b *InsertStmt) GetSQL() (string, error) {
+	b1 := *b
+	b2 := &b1
+	return getSQL(b2, b2.Dialect)
 }
 
 //insert添加设置一次性批量插入限制方法，默认1000
@@ -246,7 +246,6 @@ func (b *InsertStmt) Exec() (sql.Result, error) {
 }
 
 func (b *InsertStmt) ExecContext(ctx context.Context) (sql.Result, error) {
-	showSql(b.showSql, b, b.Dialect)
 	var err error
 	var result sql.Result
 	for len(b.Value) > 0 && err == nil {
@@ -266,7 +265,6 @@ func (b *InsertStmt) ExecContext(ctx context.Context) (sql.Result, error) {
 }
 
 func (b *InsertStmt) LoadContext(ctx context.Context, value interface{}) error {
-	showSql(b.showSql, b, b.Dialect)
 	_, err := query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value)
 	return err
 }
