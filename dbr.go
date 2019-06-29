@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gocraft/dbr/dialect"
+	"github.com/asktop/dbr/dialect"
 )
 
 // Open creates a Connection.
@@ -49,7 +49,7 @@ type Connection struct {
 
 // Session represents a business unit of execution.
 //
-// All queries in gocraft/dbr are made in the context of a session.
+// All queries in asktop/dbr are made in the context of a session.
 // This is because when instrumenting your app, it's important
 // to understand which business action the query took place in.
 //

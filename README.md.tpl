@@ -1,18 +1,13 @@
-# gocraft/dbr (database records)
+# asktop/dbr (database records)
 
-[![GoDoc](https://godoc.org/github.com/gocraft/dbr?status.png)](https://godoc.org/github.com/gocraft/dbr)
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fgocraft%2Fdbr.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fgocraft%2Fdbr?ref=badge_shield)
-[![Go Report Card](https://goreportcard.com/badge/github.com/gocraft/dbr)](https://goreportcard.com/report/github.com/gocraft/dbr)
-[![CircleCI](https://circleci.com/gh/gocraft/dbr.svg?style=svg)](https://circleci.com/gh/gocraft/dbr)
-
-gocraft/dbr provides additions to Go's database/sql for super fast performance and convenience.
+asktop/dbr provides additions to Go's database/sql for super fast performance and convenience.
 
 ```
-$ go get -u github.com/gocraft/dbr
+$ go get -u github.com/asktop/dbr
 ```
 
 ```go
-import "github.com/gocraft/dbr"
+import "github.com/asktop/dbr"
 ```
 
 ## Driver support
@@ -22,8 +17,6 @@ import "github.com/gocraft/dbr"
 * SQLite3
 
 ## Examples
-
-See [godoc](https://godoc.org/github.com/gocraft/dbr) for more examples.
 
 ### Open connections
 

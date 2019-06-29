@@ -12,7 +12,7 @@ jobs:
           - MYSQL_ROOT_PASSWORD=root
       - image: postgres:9.6-alpine
 
-    working_directory: /go/src/github.com/gocraft/dbr
+    working_directory: /go/src/github.com/asktop/dbr
     steps:
       - checkout
       - run:
