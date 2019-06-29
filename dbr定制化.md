@@ -557,7 +557,9 @@ func count(ctx context.Context, runner runner, log EventReceiver, builder Builde
  }
 ```
 
+### 11. 添加批量修改CaseUpdate
 
+**github.com/gocraft/dbr/case_update.go**
 
 
 
