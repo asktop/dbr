@@ -4,10 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	//"fmt"
 )
 
-// InsertStmt builds `INSERT INTO ...`.
 type CaseUpdateStmt struct {
 	runner
 	EventReceiver
@@ -28,6 +26,7 @@ type CaseUpdateValue struct {
 type CaseUpdateBuilder = CaseUpdateStmt
 
 func (b *CaseUpdateStmt) Build(d Dialect, buf Buffer) error {
+
 	if b.Table == "" {
 		return ErrTableNotSpecified
 	}
@@ -43,8 +42,18 @@ func (b *CaseUpdateStmt) Build(d Dialect, buf Buffer) error {
 		if i > 0 {
 			buf.WriteString(", ")
 		}
-		buf.WriteString(d.QuoteIdent(col))
-		buf.WriteString(" = CASE ")
+		if string(col[len(col)-1]) == "+" || string(col[len(col)-1]) == "-" {
+			_col := col[0 : len(col)-1]
+
+			buf.WriteString(d.QuoteIdent(_col))
+			buf.WriteString(" = ")
+			buf.WriteString(d.QuoteIdent(_col))
+			buf.WriteString(" " + string(col[len(col)-1]) + " ")
+		} else {
+			buf.WriteString(d.QuoteIdent(col))
+			buf.WriteString(" = ")
+		}
+		buf.WriteString(" CASE ")
 		buf.WriteString(d.QuoteIdent(b.PKey))
 		for x, v := range b.Value {
 			if x >= b.RunLen && b.RunLen > 0 {
@@ -85,7 +94,6 @@ func (b *CaseUpdateStmt) Build(d Dialect, buf Buffer) error {
 	return nil
 }
 
-// InsertInto creates an InsertStmt.
 func CaseUpdate(table string) *CaseUpdateStmt {
 	return &CaseUpdateStmt{
 		Table: table,
@@ -93,7 +101,6 @@ func CaseUpdate(table string) *CaseUpdateStmt {
 	}
 }
 
-// InsertInto creates an InsertStmt.
 func (sess *Session) CaseUpdate(table string) *CaseUpdateStmt {
 	b := CaseUpdate(table)
 	b.runner = sess
@@ -102,7 +109,6 @@ func (sess *Session) CaseUpdate(table string) *CaseUpdateStmt {
 	return b
 }
 
-// InsertInto creates an InsertStmt.
 func (tx *Tx) CaseUpdate(table string) *CaseUpdateStmt {
 	b := CaseUpdate(table)
 	b.runner = tx
@@ -111,25 +117,33 @@ func (tx *Tx) CaseUpdate(table string) *CaseUpdateStmt {
 	return b
 }
 
-func (b *CaseUpdateStmt) Columns(column ...string) *CaseUpdateStmt {
+// PKey		主键字段名
+// column	更新字段名
+func (b *CaseUpdateStmt) Columns(PKey string, column ...string) *CaseUpdateStmt {
+	b.PKey = PKey
 	b.Column = column
 	return b
 }
 
-// Values adds a tuple to be inserted.
-// The order of the tuple should match Columns.
-func (b *CaseUpdateStmt) Values(PKey interface{}, value ...interface{}) *CaseUpdateStmt {
-	pk := fmt.Sprint(PKey)
+// PKValue	主键字段值
+// value	对应更新字段值
+func (b *CaseUpdateStmt) Values(PKValue interface{}, value ...interface{}) *CaseUpdateStmt {
+	pk := fmt.Sprint(PKValue)
 	for k, v := range b.Value {
 		if v.Key == pk {
 			b.Value[k].Val = value
 		}
 	}
 	b.Value = append(b.Value, CaseUpdateValue{
-		Key: fmt.Sprint(PKey),
+		Key: fmt.Sprint(PKValue),
 		Val: value,
 	})
-	//b.Value[fmt.Sprint(PKey)]=value
+	return b
+}
+
+// 设置分批每次执行条数
+func (b *CaseUpdateStmt) SetRunLen(i int) *CaseUpdateStmt {
+	b.RunLen = i
 	return b
 }
 
@@ -139,12 +153,6 @@ func (b *CaseUpdateStmt) Returning(column ...string) *CaseUpdateStmt {
 	return b
 }
 
-// Returning specifies the returning columns for postgres.
-func (b *CaseUpdateStmt) SetRunLen(i int) *CaseUpdateStmt {
-	//b.runnum
-	b.RunLen = i
-	return b
-}
 func (b *CaseUpdateStmt) Exec() error {
 	var err error
 	for len(b.Value) > 0 && err == nil {
