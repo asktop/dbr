@@ -2,6 +2,7 @@ package dbr
 
 import (
 	"database/sql"
+	"fmt"
 	"reflect"
 )
 
@@ -131,7 +132,11 @@ func Load(rows *sql.Rows, value interface{}) (int, error) {
 			ptr[i] = nil
 		}
 	}
-	return count, nil
+	e := rows.Err()
+	if e != nil {
+		fmt.Println("dbr.Load rows.Err() != nil err:"+e.Error())
+	}
+	return count, e
 }
 
 func reflectAlloc(typ reflect.Type) reflect.Value {
