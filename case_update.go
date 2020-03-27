@@ -26,6 +26,10 @@ type CaseUpdateValue struct {
 type CaseUpdateBuilder = CaseUpdateStmt
 
 func (b *CaseUpdateStmt) Build(d Dialect, buf Buffer) error {
+	//赋予批量更新默认最大上限
+	if b.RunLen == 0 {
+		b.RunLen = 1000
+	}
 
 	if b.Table == "" {
 		return ErrTableNotSpecified
