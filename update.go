@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"strconv"
+	"regexp"
+	"strings"
 )
 
 // UpdateStmt builds `UPDATE ...`.
@@ -46,10 +48,21 @@ func (b *UpdateStmt) Build(d Dialect, buf Buffer) error {
 		if i > 0 {
 			buf.WriteString(", ")
 		}
-		buf.WriteString(d.QuoteIdent(col))
+		fieldname := strings.TrimSpace(col)
+		expstr := ""
+		//正则分割取值
+		reg := regexp.MustCompile(`\s`)
+		regstrs := reg.Split(col,2)
+		if len(regstrs)==2{
+			fieldname = strings.TrimSpace(regstrs[0])
+			expstr = strings.TrimSpace(regstrs[1])
+		}
+		buf.WriteString(d.QuoteIdent(fieldname))
 		buf.WriteString(" = ")
-
-		//update Set方法value值支持dbr.Expr表达式
+		if expstr!="" {
+			buf.WriteString(d.QuoteIdent(fieldname))
+			buf.WriteString(expstr)
+		}
 		switch v := v.(type) {
 		case raw:
 			v.Build(d, buf)

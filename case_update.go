@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 type CaseUpdateStmt struct {
@@ -46,16 +48,20 @@ func (b *CaseUpdateStmt) Build(d Dialect, buf Buffer) error {
 		if i > 0 {
 			buf.WriteString(", ")
 		}
-		if string(col[len(col)-1]) == "+" || string(col[len(col)-1]) == "-" {
-			_col := col[0 : len(col)-1]
-
-			buf.WriteString(d.QuoteIdent(_col))
-			buf.WriteString(" = ")
-			buf.WriteString(d.QuoteIdent(_col))
-			buf.WriteString(" " + string(col[len(col)-1]) + " ")
-		} else {
-			buf.WriteString(d.QuoteIdent(col))
-			buf.WriteString(" = ")
+		fieldname := strings.TrimSpace(col)
+		expstr := ""
+		//正则分割取值
+		reg := regexp.MustCompile(`\s`)
+		regstrs := reg.Split(col,2)
+		if len(regstrs)==2{
+			fieldname = strings.TrimSpace(regstrs[0])
+			expstr = strings.TrimSpace(regstrs[1])
+		}
+		buf.WriteString(d.QuoteIdent(fieldname))
+		buf.WriteString(" = ")
+		if expstr!="" {
+			buf.WriteString(d.QuoteIdent(fieldname))
+			buf.WriteString(expstr)
 		}
 		buf.WriteString(" CASE ")
 		buf.WriteString(d.QuoteIdent(b.PKey))
