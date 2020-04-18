@@ -163,6 +163,13 @@ func (b *CaseUpdateStmt) Returning(column ...string) *CaseUpdateStmt {
 	return b
 }
 
+//获取SQL
+func (b *CaseUpdateStmt) GetSQL() (string, error) {
+	b1 := *b
+	b2 := &b1
+	return getSQL(b2, b2.Dialect)
+}
+
 func (b *CaseUpdateStmt) Exec() error {
 	var err error
 	for len(b.Value) > 0 && err == nil {
