@@ -2,9 +2,13 @@
 package dbr
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
 	"database/sql"
+	"encoding/gob"
 	"fmt"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -175,11 +179,6 @@ func queryRows(ctx context.Context, runner runner, log EventReceiver, builder Bu
 	}
 
 	startTime := time.Now()
-	//defer func() {
-	//	log.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
-	//		"sql": query,
-	//	})
-	//}()
 
 	traceImpl, hasTracingImpl := log.(TracingEventReceiver)
 	if hasTracingImpl {
@@ -201,7 +200,7 @@ func queryRows(ctx context.Context, runner runner, log EventReceiver, builder Bu
 	return query, rows, nil
 }
 
-func query(ctx context.Context, runner runner, log EventReceiver, builder Builder, d Dialect, dest interface{}) (int, error) {
+func query(ctx context.Context, runner runner, log EventReceiver, builder Builder, d Dialect, dest interface{}, customs ...Custom) (int, error) {
 	timeout := runner.GetTimeout()
 	if timeout > 0 {
 		var cancel func()
@@ -210,16 +209,160 @@ func query(ctx context.Context, runner runner, log EventReceiver, builder Builde
 	}
 
 	startTime := time.Now()
-	query, rows, err := queryRows(ctx, runner, log, builder, d)
-	if err != nil {
-		return 0, err
+
+	var custom Custom //自定义参数
+	if len(customs) > 0 {
+		custom = customs[0]
 	}
-	count, err := Load(rows, dest)
-	if err != nil {
-		return 0, log.EventErrKv("dbr.select.load.scan", err, kvs{
-			"sql":  query,
-			"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
-		})
+
+	var err error
+	var query, dbcacheDataKey, dbcacheSqlKey string
+	var count int
+
+	//redis缓存数据库数据获取
+	if custom.isCache {
+		query, err = getSQL(builder, d)
+		if err != nil {
+			return 0, log.EventErrKv("dbr.select.cache.getSQL", err, kvs{
+				"sql":  query,
+				"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+			})
+		}
+		if custom.isCount {
+			query = fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS count", query)
+		}
+		//redis缓存数据Key
+		dbcacheDataKey = fmt.Sprintf("dbcache:data:%s", md5Str(query))
+		//redis缓存数据对应SQL语句Key
+		dbcacheSqlKey = fmt.Sprintf("dbcache:sql:%s", md5Str(query))
+
+		//查询redis缓存数据是否存在，不存在则查询数据库
+		reply, exist, err := custom.cache.GetBytes(dbcacheDataKey)
+		if err != nil {
+			_ = log.EventErrKv("dbr.select.cache.get", err, kvs{
+				"sql":  query,
+				"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+			})
+		} else {
+			if exist {
+				if custom.isCount {
+					decoder := gob.NewDecoder(bytes.NewReader(reply)) //创建解密器
+					err = decoder.Decode(&count) //解密
+					if err != nil {
+						_ = log.EventErrKv("dbr.select.cache.decode", err, kvs{
+							"sql":  query,
+							"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+						})
+					} else {
+						log.TimingKv("dbr.select.cache", time.Since(startTime).Nanoseconds(), kvs{
+							"sql": query,
+						})
+						return count, nil
+					}
+				} else {
+					decoder := gob.NewDecoder(bytes.NewReader(reply)) //创建解密器
+					err = decoder.Decode(dest) //解密
+					if err != nil {
+						_ = log.EventErrKv("dbr.select.cache.decode", err, kvs{
+							"sql":  query,
+							"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+						})
+					} else {
+						count = 1
+						v := reflect.ValueOf(dest)
+						if v.Kind() != reflect.Ptr || v.IsNil() {
+							return 0, log.EventErrKv("dbr.select.cache.decode", ErrInvalidPointer, kvs{
+								"sql":  query,
+								"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+							})
+						}
+						v = v.Elem()
+						if v.Kind() == reflect.Slice {
+							count = v.Len()
+						}
+						log.TimingKv("dbr.select.cache", time.Since(startTime).Nanoseconds(), kvs{
+							"sql": query,
+						})
+						return count, nil
+					}
+				}
+			}
+		}
+	}
+
+	var cacheBuffer bytes.Buffer
+	var cacheBufferErr bool
+	if custom.isCount {
+		//获取数据库数据条数
+		query, count, err = queryCount(ctx, runner, log, builder, d)
+		if err != nil {
+			return 0, log.EventErrKv("dbr.select.load.scan", err, kvs{
+				"sql":  query,
+				"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+			})
+		}
+
+		//redis缓存数据编码
+		if custom.isCache {
+			encoder := gob.NewEncoder(&cacheBuffer) //创建编码器
+			err = encoder.Encode(&count)            //编码
+			if err != nil {
+				cacheBufferErr = true
+				_ = log.EventErrKv("dbr.select.cache.encode", err, kvs{
+					"sql":  query,
+					"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+				})
+			}
+		}
+	} else {
+		//获取数据库数据
+		var rows *sql.Rows
+		query, rows, err = queryRows(ctx, runner, log, builder, d)
+		if err != nil {
+			return 0, log.EventErrKv("dbr.select.load.scan", err, kvs{
+				"sql":  query,
+				"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+			})
+		}
+		count, err = Load(rows, dest)
+		if err != nil {
+			return 0, log.EventErrKv("dbr.select.load.scan", err, kvs{
+				"sql":  query,
+				"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+			})
+		}
+
+		//redis缓存数据编码
+		if custom.isCache {
+			encoder := gob.NewEncoder(&cacheBuffer) //创建编码器
+			err = encoder.Encode(dest)              //编码
+			if err != nil {
+				cacheBufferErr = true
+				_ = log.EventErrKv("dbr.select.cache.encode", err, kvs{
+					"sql":  query,
+					"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+				})
+			}
+		}
+	}
+
+	//redis缓存数据保存
+	if custom.isCache && !cacheBufferErr {
+		_, err = custom.cache.Set(dbcacheDataKey, cacheBuffer.Bytes(), custom.cacheExpire)
+		if err != nil {
+			_ = log.EventErrKv("dbr.select.cache.set", err, kvs{
+				"sql":  query,
+				"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+			})
+		} else {
+			_, err = custom.cache.Set(dbcacheSqlKey, query, custom.cacheExpire)
+			if err != nil {
+				_ = log.EventErrKv("dbr.select.cache.set", err, kvs{
+					"sql":  query,
+					"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+				})
+			}
+		}
 	}
 
 	log.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
@@ -228,7 +371,7 @@ func query(ctx context.Context, runner runner, log EventReceiver, builder Builde
 	return count, nil
 }
 
-func count(ctx context.Context, runner runner, log EventReceiver, builder Builder, d Dialect) (int, error) {
+func queryCount(ctx context.Context, runner runner, log EventReceiver, builder Builder, d Dialect) (string, int, error) {
 	i := interpolator{
 		Buffer:       NewBuffer(),
 		Dialect:      d,
@@ -238,7 +381,7 @@ func count(ctx context.Context, runner runner, log EventReceiver, builder Builde
 	query, value := i.String(), i.Value()
 	query = fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS count", query)
 	if err != nil {
-		return 0, log.EventErrKv("dbr.select.interpolate", err, kvs{
+		return query, 0, log.EventErrKv("dbr.select.interpolate", err, kvs{
 			"sql":  query,
 			"args": fmt.Sprint(value),
 		})
@@ -257,7 +400,7 @@ func count(ctx context.Context, runner runner, log EventReceiver, builder Builde
 		if hasTracingImpl {
 			traceImpl.SpanError(ctx, err)
 		}
-		return 0, log.EventErrKv("dbr.select.load.query", err, kvs{
+		return query, 0, log.EventErrKv("dbr.select.load.query", err, kvs{
 			"sql":  query,
 			"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
 		})
@@ -268,10 +411,7 @@ func count(ctx context.Context, runner runner, log EventReceiver, builder Builde
 		rows.Scan(&count)
 	}
 
-	log.TimingKv("dbr.count", time.Since(startTime).Nanoseconds(), kvs{
-		"sql": query,
-	})
-	return count, nil
+	return query, count, nil
 }
 
 //获取SQL
@@ -283,4 +423,11 @@ func getSQL(builder Builder, d Dialect) (string, error) {
 	}
 	err := i.encodePlaceholder(builder, true)
 	return i.String(), err
+}
+
+//md5加密
+func md5Str(str string) string {
+	hash := md5.New()
+	hash.Write([]byte(str))
+	return fmt.Sprintf("%x", hash.Sum(nil))
 }

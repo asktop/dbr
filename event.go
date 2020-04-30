@@ -74,7 +74,7 @@ func (n *NullEventReceiver) EventErrKv(eventName string, err error, kvs map[stri
 			useStr = "-"
 			use = use * 0
 		}
-		sqlLog := fmt.Sprintf("[ERR %sms] [%v] %s", useStr, err, sql)
+		sqlLog := fmt.Sprintf("[ERR %sms] [%s - %v] %s", useStr, eventName, err, sql)
 		if logPrintFunc != nil {
 			logPrintFunc(sqlLog)
 		} else {
@@ -94,7 +94,7 @@ func (n *NullEventReceiver) TimingKv(eventName string, nanoseconds int64, kvs ma
 		if s, ok := kvs["sql"]; ok {
 			sql = s
 		}
-		sqlLog := fmt.Sprintf("[OK %dms] %s", nanoseconds/1e6, sql)
+		sqlLog := fmt.Sprintf("[OK %dms] [%s] %s", nanoseconds/1e6, eventName, sql)
 		if logPrintFunc != nil {
 			logPrintFunc(sqlLog)
 		} else {

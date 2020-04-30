@@ -31,6 +31,16 @@ type SelectStmt struct {
 	OffsetCount int64
 	TableAs     string
 	IsLock      *bool
+
+	custom 		Custom //自定义参数
+}
+
+//自定义参数
+type Custom struct {
+	isCount     bool        //是否获取总条数
+	isCache     bool		//是否redis缓存
+	cache       selectCache //redis缓存
+	cacheExpire int64       //redis缓存时间
 }
 
 type SelectBuilder = SelectStmt
@@ -366,6 +376,14 @@ func (b *SelectStmt) Lock(isLock bool) *SelectStmt {
 	return b
 }
 
+//redis缓存数据
+func (b *SelectStmt) Cache(cache selectCache, seconds int64) *SelectStmt {
+	b.custom.isCache = true
+	b.custom.cache = cache
+	b.custom.cacheExpire = seconds
+	return b
+}
+
 //获取SQL
 func (b *SelectStmt) GetSQL() (string, error) {
 	b1 := *b
@@ -377,7 +395,8 @@ func (b *SelectStmt) GetSQL() (string, error) {
 func (b *SelectStmt) Count() (int, error) {
 	b1 := *b
 	b2 := &b1
-	return count(context.Background(), b2.runner, b2.EventReceiver, b2, b2.Dialect)
+	b2.custom.isCount = true
+	return query(context.Background(), b2.runner, b2.EventReceiver, b2, b2.Dialect, nil, b2.custom)
 }
 
 // Rows executes the query and returns the rows returned, or any error encountered.
@@ -395,7 +414,7 @@ func (b *SelectStmt) RowsContext(ctx context.Context) (*sql.Rows, error) {
 }
 
 func (b *SelectStmt) LoadOneContext(ctx context.Context, value interface{}) error {
-	count, err := query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value)
+	count, err := query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value, b.custom)
 	if err != nil {
 		return err
 	}
@@ -413,7 +432,7 @@ func (b *SelectStmt) LoadOne(value interface{}) error {
 }
 
 func (b *SelectStmt) LoadContext(ctx context.Context, value interface{}) (int, error) {
-	return query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value)
+	return query(ctx, b.runner, b.EventReceiver, b, b.Dialect, value, b.custom)
 }
 
 // Load loads multi-row SQL result into a slice of go variables.
