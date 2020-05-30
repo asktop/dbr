@@ -248,7 +248,7 @@ func (b *InsertStmt) Exec() (sql.Result, error) {
 func (b *InsertStmt) ExecContext(ctx context.Context) (sql.Result, error) {
 	var err error
 	var result sql.Result
-	for len(b.Value) > 0 && err == nil {
+	if b.Table == "" {
 		result, err = exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
 		if err != nil {
 			return nil, err
@@ -258,6 +258,19 @@ func (b *InsertStmt) ExecContext(ctx context.Context) (sql.Result, error) {
 				*b.RecordID = id
 			}
 			b.RecordID = nil
+		}
+	} else {
+		for len(b.Value) > 0 && err == nil {
+			result, err = exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
+			if err != nil {
+				return nil, err
+			}
+			if b.RecordID != nil {
+				if id, err := result.LastInsertId(); err == nil {
+					*b.RecordID = id
+				}
+				b.RecordID = nil
+			}
 		}
 	}
 
