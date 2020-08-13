@@ -17,6 +17,8 @@ type DeleteStmt struct {
 	Table      string
 	WhereCond  []Builder
 	LimitCount int64
+
+	custom		Custom //自定义参数
 }
 
 type DeleteBuilder = DeleteStmt
@@ -119,6 +121,14 @@ func (b *DeleteStmt) Limit(n uint64) *DeleteStmt {
 	return b
 }
 
+//redis缓存数据
+func (b *DeleteStmt) Cache(cache customCache, key string) *DeleteStmt {
+	b.custom.isCache = true
+	b.custom.cache = cache
+	b.custom.cacheKey = key
+	return b
+}
+
 //获取SQL
 func (b *DeleteStmt) GetSQL() (string, error) {
 	b1 := *b
@@ -131,5 +141,5 @@ func (b *DeleteStmt) Exec() (sql.Result, error) {
 }
 
 func (b *DeleteStmt) ExecContext(ctx context.Context) (sql.Result, error) {
-	return exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
+	return exec(ctx, b.runner, b.EventReceiver, b, b.Dialect, b.custom)
 }

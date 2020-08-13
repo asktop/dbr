@@ -7,6 +7,7 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -108,7 +109,7 @@ type runner interface {
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 }
 
-func exec(ctx context.Context, runner runner, log EventReceiver, builder Builder, d Dialect) (sql.Result, error) {
+func exec(ctx context.Context, runner runner, log EventReceiver, builder Builder, d Dialect, customs ...Custom) (sql.Result, error) {
 	timeout := runner.GetTimeout()
 	if timeout > 0 {
 		var cancel func()
@@ -152,6 +153,26 @@ func exec(ctx context.Context, runner runner, log EventReceiver, builder Builder
 			"sql":  query,
 			"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
 		})
+	}
+
+	var custom Custom //自定义参数
+	if len(customs) > 0 {
+		custom = customs[0]
+	}
+
+	//redis缓存数据库数据删除
+	if custom.isCache {
+		//redis缓存数据Key
+		dbcacheDataKey := custom.cacheKey
+		if dbcacheDataKey != "" {
+			err = custom.cache.Del(dbcacheDataKey)
+			if err != nil {
+				_ = log.EventErrKv("dbr.exec.cache.del", err, kvs{
+					"sql":  query,
+					"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+				})
+			}
+		}
 	}
 
 	log.TimingKv("dbr.exec", time.Since(startTime).Nanoseconds(), kvs{
@@ -216,7 +237,7 @@ func query(ctx context.Context, runner runner, log EventReceiver, builder Builde
 	}
 
 	var err error
-	var query, dbcacheDataKey, dbcacheSqlKey string
+	var query, dbcacheDataKey string
 	var count int
 
 	//redis缓存数据库数据获取
@@ -232,9 +253,13 @@ func query(ctx context.Context, runner runner, log EventReceiver, builder Builde
 			query = fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS count", query)
 		}
 		//redis缓存数据Key
-		dbcacheDataKey = fmt.Sprintf("dbcache:data:%s", md5Str(query))
-		//redis缓存数据对应SQL语句Key
-		dbcacheSqlKey = fmt.Sprintf("dbcache:sql:%s", md5Str(query))
+		dbcacheDataKey = custom.cacheKey
+		if dbcacheDataKey == "" {
+			return 0, log.EventErrKv("dbr.select.cache.key", errors.New("cache.key can not be empty"), kvs{
+				"sql":  query,
+				"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
+			})
+		}
 
 		//查询redis缓存数据是否存在，不存在则查询数据库
 		reply, exist, err := custom.cache.GetBytes(dbcacheDataKey)
@@ -354,14 +379,6 @@ func query(ctx context.Context, runner runner, log EventReceiver, builder Builde
 				"sql":  query,
 				"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
 			})
-		} else {
-			_, err = custom.cache.Set(dbcacheSqlKey, query, custom.cacheExpire)
-			if err != nil {
-				_ = log.EventErrKv("dbr.select.cache.set", err, kvs{
-					"sql":  query,
-					"time": strconv.FormatInt(time.Since(startTime).Nanoseconds()/1e6, 10),
-				})
-			}
 		}
 	}
 

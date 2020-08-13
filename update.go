@@ -22,6 +22,8 @@ type UpdateStmt struct {
 	WhereCond    []Builder
 	ReturnColumn []string
 	LimitCount   int64
+
+	custom		Custom //自定义参数
 }
 
 type UpdateBuilder = UpdateStmt
@@ -196,6 +198,14 @@ func (b *UpdateStmt) Limit(n uint64) *UpdateStmt {
 	return b
 }
 
+//redis缓存数据
+func (b *UpdateStmt) Cache(cache customCache, key string) *UpdateStmt {
+	b.custom.isCache = true
+	b.custom.cache = cache
+	b.custom.cacheKey = key
+	return b
+}
+
 //获取SQL
 func (b *UpdateStmt) GetSQL() (string, error) {
 	b1 := *b
@@ -217,5 +227,5 @@ func (b *UpdateStmt) LoadContext(ctx context.Context, value interface{}) error {
 }
 
 func (b *UpdateStmt) Load(value interface{}) error {
-	return b.LoadContext(context.Background(), value)
+	return exec(ctx, b.runner, b.EventReceiver, b, b.Dialect, b.custom)
 }

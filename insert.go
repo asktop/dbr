@@ -21,6 +21,8 @@ type InsertStmt struct {
 	ReturnColumn []string
 	RecordID     *int64
 	RunLen       int
+
+	custom		Custom //自定义参数
 }
 
 type InsertBuilder = InsertStmt
@@ -228,6 +230,14 @@ func (b *InsertStmt) Map(kv map[string]interface{}) *InsertStmt {
 	return b
 }
 
+//redis缓存数据
+func (b *InsertStmt) Cache(cache customCache, key string) *InsertStmt {
+	b.custom.isCache = true
+	b.custom.cache = cache
+	b.custom.cacheKey = key
+	return b
+}
+
 //获取SQL
 func (b *InsertStmt) GetSQL() (string, error) {
 	b1 := *b
@@ -249,7 +259,7 @@ func (b *InsertStmt) ExecContext(ctx context.Context) (sql.Result, error) {
 	var err error
 	var result sql.Result
 	if b.Table == "" {
-		result, err = exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
+		result, err = exec(ctx, b.runner, b.EventReceiver, b, b.Dialect, b.custom)
 		if err != nil {
 			return nil, err
 		}

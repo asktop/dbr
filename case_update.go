@@ -18,6 +18,8 @@ type CaseUpdateStmt struct {
 	Column       []string
 	Value        []CaseUpdateValue
 	ReturnColumn []string
+
+	custom		Custom //自定义参数
 }
 
 type CaseUpdateValue struct {
@@ -163,6 +165,14 @@ func (b *CaseUpdateStmt) Returning(column ...string) *CaseUpdateStmt {
 	return b
 }
 
+//redis缓存数据
+func (b *CaseUpdateStmt) Cache(cache customCache, key string) *CaseUpdateStmt {
+    b.custom.isCache = true
+    b.custom.cache = cache
+    b.custom.cacheKey = key
+    return b
+}
+
 //获取SQL
 func (b *CaseUpdateStmt) GetSQL() (string, error) {
 	b1 := *b
@@ -179,7 +189,7 @@ func (b *CaseUpdateStmt) Exec() error {
 }
 
 func (b *CaseUpdateStmt) ExecContext(ctx context.Context) (sql.Result, error) {
-	result, err := exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
+    result, err := exec(ctx, b.runner, b.EventReceiver, b, b.Dialect, b.custom)
 	if err != nil {
 		return nil, err
 	}

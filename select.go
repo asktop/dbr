@@ -35,14 +35,6 @@ type SelectStmt struct {
 	custom 		Custom //自定义参数
 }
 
-//自定义参数
-type Custom struct {
-	isCount     bool        //是否获取总条数
-	isCache     bool		//是否redis缓存
-	cache       selectCache //redis缓存
-	cacheExpire int64       //redis缓存时间
-}
-
 type SelectBuilder = SelectStmt
 
 func (b *SelectStmt) Build(d Dialect, buf Buffer) error {
@@ -377,9 +369,10 @@ func (b *SelectStmt) Lock(isLock bool) *SelectStmt {
 }
 
 //redis缓存数据
-func (b *SelectStmt) Cache(cache selectCache, seconds int64) *SelectStmt {
+func (b *SelectStmt) Cache(cache customCache, key string, seconds int64) *SelectStmt {
 	b.custom.isCache = true
 	b.custom.cache = cache
+	b.custom.cacheKey = key
 	b.custom.cacheExpire = seconds
 	return b
 }
