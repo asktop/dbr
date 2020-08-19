@@ -218,7 +218,7 @@ func (b *UpdateStmt) Exec() (sql.Result, error) {
 }
 
 func (b *UpdateStmt) ExecContext(ctx context.Context) (sql.Result, error) {
-	return exec(ctx, b.runner, b.EventReceiver, b, b.Dialect)
+	return exec(ctx, b.runner, b.EventReceiver, b, b.Dialect, b.custom)
 }
 
 func (b *UpdateStmt) LoadContext(ctx context.Context, value interface{}) error {
@@ -227,5 +227,5 @@ func (b *UpdateStmt) LoadContext(ctx context.Context, value interface{}) error {
 }
 
 func (b *UpdateStmt) Load(value interface{}) error {
-	return exec(ctx, b.runner, b.EventReceiver, b, b.Dialect, b.custom)
+	return b.LoadContext(context.Background(), value)
 }
